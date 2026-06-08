@@ -1,4 +1,4 @@
-name: Deploy to OCI Tomcat
+name: Deploy to GCP Tomcat
 
 on:
   push:
@@ -12,7 +12,7 @@ jobs:
       - self-hosted
       - Linux
       - x64
-      - oci
+      - gcp
       - tomcat
 
     env:
