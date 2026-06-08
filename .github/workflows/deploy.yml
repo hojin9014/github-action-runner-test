@@ -1,4 +1,4 @@
-name: Runner Test
+name: Deploy to OCI Tomcat
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-runner:
+  deploy:
     runs-on:
       - self-hosted
       - Linux
@@ -15,10 +15,45 @@ jobs:
       - oci
       - tomcat
 
+    env:
+      APP_WAR: nice-poc.war
+      DEPLOY_WAR: ROOT.war
+      TOMCAT_SERVICE: tomcat10
+      TOMCAT_WEBAPPS: /var/lib/tomcat10/webapps
 
     steps:
-      - name: Check runner
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check runner environment
         run: |
           hostname
+          whoami
           pwd
-          
+          java -version
+          mvn -version
+
+      - name: Build WAR
+        run: |
+          mvn -B clean package
+          ls -al target
+
+      - name: Stop Tomcat
+        run: |
+          sudo systemctl stop "$TOMCAT_SERVICE"
+
+      - name: Deploy WAR
+        run: |
+          sudo rm -f "$TOMCAT_WEBAPPS/$DEPLOY_WAR"
+          sudo rm -rf "$TOMCAT_WEBAPPS/ROOT"
+          sudo cp "target/$APP_WAR" "$TOMCAT_WEBAPPS/$DEPLOY_WAR"
+          sudo chown tomcat:tomcat "$TOMCAT_WEBAPPS/$DEPLOY_WAR" || true
+
+      - name: Start Tomcat
+        run: |
+          sudo systemctl start "$TOMCAT_SERVICE"
+          sudo systemctl status "$TOMCAT_SERVICE" --no-pager
+
+      - name: Show deployed files
+        run: |
+          ls -al "$TOMCAT10_WEBAPPS"
