@@ -7,7 +7,7 @@ jobs:
   test-runner:
     runs-on:
       - self-hosted
-      - linux
+      - Linux
       - x64
 
 
