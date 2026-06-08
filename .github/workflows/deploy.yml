@@ -44,10 +44,10 @@ jobs:
 
       - name: Deploy WAR
         run: |
-          sudo rm -f "$TOMCAT_WEBAPPS/$DEPLOY_WAR"
-          sudo rm -rf "$TOMCAT_WEBAPPS/ROOT"
-          sudo cp "target/$APP_WAR" "$TOMCAT_WEBAPPS/$DEPLOY_WAR"
-          sudo chown tomcat:tomcat "$TOMCAT_WEBAPPS/$DEPLOY_WAR" || true
+          sudo -n /usr/bin/rm -f "$TOMCAT_WEBAPPS/$DEPLOY_WAR"
+          sudo -n /usr/bin/rm -rf "$TOMCAT_WEBAPPS/ROOT"
+          sudo -n /usr/bin/cp "target/$APP_WAR" "$TOMCAT_WEBAPPS/$DEPLOY_WAR"
+          sudo -n /usr/bin/chown tomcat:tomcat "$TOMCAT_WEBAPPS/$DEPLOY_WAR" || true
 
       - name: Start Tomcat
         run: |
@@ -56,4 +56,4 @@ jobs:
 
       - name: Show deployed files
         run: |
-          ls -al "$TOMCAT10_WEBAPPS"
+          ls -al "$TOMCAT_WEBAPPS"
