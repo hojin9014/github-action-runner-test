@@ -9,6 +9,8 @@ jobs:
       - self-hosted
       - Linux
       - x64
+      - oci
+      - tomcat
 
 
     steps:
