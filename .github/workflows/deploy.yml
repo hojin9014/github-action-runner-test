@@ -51,8 +51,8 @@ jobs:
 
       - name: Start Tomcat
         run: |
-          sudo systemctl start "$TOMCAT_SERVICE"
-          sudo systemctl status "$TOMCAT_SERVICE" --no-pager
+          sudo -n systemctl start "$TOMCAT_SERVICE"
+          sudo -n systemctl status "$TOMCAT_SERVICE" --no-pager
 
       - name: Show deployed files
         run: |
