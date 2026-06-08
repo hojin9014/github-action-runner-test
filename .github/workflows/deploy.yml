@@ -1,0 +1,19 @@
+name: Runner Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-runner:
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+
+
+    steps:
+      - name: Check runner
+        run : |
+          hostname
+          pwd
+          java -version
