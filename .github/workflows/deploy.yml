@@ -21,4 +21,4 @@ jobs:
         run: |
           hostname
           pwd
-          java -version
+          
