@@ -1,5 +1,6 @@
 name: Deploy to GCP Tomcat
 
+# main 브랜치에 push되거나 GitHub Actions 화면에서 수동 실행할 때 배포한다.
 on:
   push:
     branches:
@@ -8,13 +9,14 @@ on:
 
 jobs:
   deploy:
+    # GCP VM에 설치된 self-hosted runner 중 아래 label을 모두 가진 runner에서 실행한다.
     runs-on:
       - self-hosted
       - Linux
       - x64
-      - gcp
       - tomcat
 
+    # 배포에 반복해서 쓰는 값들을 환경 변수로 정의한다.
     env:
       APP_WAR: nice-poc.war
       DEPLOY_WAR: ROOT.war
@@ -23,37 +25,54 @@ jobs:
 
     steps:
       - name: Checkout
+        # GitHub repository의 현재 main 소스코드를 runner 작업 디렉터리로 내려받는다.
         uses: actions/checkout@v4
 
       - name: Check runner environment
         run: |
+          # 현재 job을 실행하는 GCP VM의 hostname을 확인한다.
           hostname
+          # 현재 job을 실행하는 Linux 사용자를 확인한다.
           whoami
+          # GitHub Actions runner가 소스코드를 checkout한 작업 디렉터리를 확인한다.
           pwd
+          # runner에 설치된 Java 버전을 확인한다. Spring Boot 3.x는 Java 17 이상이 필요하다.
           java -version
+          # runner에 Maven이 설치되어 있는지 확인한다. 없으면 mvn: command not found 오류가 난다.
           mvn -version
 
       - name: Build WAR
         run: |
+          # Maven으로 기존 빌드 산출물을 지우고 WAR 파일을 새로 빌드한다.
           mvn -B clean package
+          # 빌드 결과로 target/nice-poc.war가 생성되었는지 확인한다.
           ls -al target
 
       - name: Stop Tomcat
         run: |
+          # sudo -n은 비밀번호를 묻지 않고 실행한다. 실패하면 sudoers NOPASSWD 설정이 부족한 것이다.
+          # root 비밀번호를 deploy.yml에 직접 적지 않는다. 필요한 권한은 GCP VM의 sudoers에서 제한적으로 허용한다.
           sudo -n /usr/bin/systemctl stop "$TOMCAT_SERVICE"
 
       - name: Deploy WAR
         run: |
+          # 기존 ROOT.war 파일을 삭제해서 이전 배포 파일이 남지 않게 한다.
           sudo -n /usr/bin/rm -f "$TOMCAT_WEBAPPS/$DEPLOY_WAR"
+          # Tomcat이 기존 ROOT.war를 풀어 만든 ROOT 디렉터리를 삭제한다.
           sudo -n /usr/bin/rm -rf "$TOMCAT_WEBAPPS/ROOT"
+          # 새로 빌드한 WAR 파일을 Tomcat 기본 경로인 ROOT.war로 복사한다.
           sudo -n /usr/bin/cp "target/$APP_WAR" "$TOMCAT_WEBAPPS/$DEPLOY_WAR"
+          # Tomcat 프로세스가 WAR 파일을 읽을 수 있도록 소유자를 tomcat 사용자로 맞춘다.
           sudo -n /usr/bin/chown tomcat:tomcat "$TOMCAT_WEBAPPS/$DEPLOY_WAR" || true
 
       - name: Start Tomcat
         run: |
+          # 새로 배포한 ROOT.war를 읽도록 Tomcat 서비스를 시작한다.
           sudo -n /usr/bin/systemctl start "$TOMCAT_SERVICE"
+          # Tomcat 서비스가 정상 실행 중인지 Actions 로그에 출력한다.
           sudo -n /usr/bin/systemctl status "$TOMCAT_SERVICE" --no-pager
 
       - name: Show deployed files
         run: |
+          # webapps 경로의 배포 결과를 확인한다.
           ls -al "$TOMCAT_WEBAPPS"
