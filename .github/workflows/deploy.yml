@@ -41,10 +41,15 @@ jobs:
           # runner에 Maven이 설치되어 있는지 확인한다. 없으면 mvn: command not found 오류가 난다.
           mvn -version
 
+      - name: Run tests
+        run: |
+          # 배포 전에 Controller 테스트와 Spring context 로딩 테스트를 실행한다.
+          mvn -B clean test
+
       - name: Build WAR
         run: |
-          # Maven으로 기존 빌드 산출물을 지우고 WAR 파일을 새로 빌드한다.
-          mvn -B clean package
+          # 테스트는 이전 step에서 이미 통과했으므로 여기서는 WAR 파일만 패키징한다.
+          mvn -B package -DskipTests
           # 빌드 결과로 target/nice-poc.war가 생성되었는지 확인한다.
           ls -al target
 
