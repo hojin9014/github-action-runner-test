@@ -1,0 +1,52 @@
+name: Pull Request CI
+
+# main 브랜치로 들어오는 Pull Request가 생성되거나 수정될 때 실행한다.
+# 이 workflow는 검증 전용이며 GCP VM의 Tomcat에는 배포하지 않는다.
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    name: Test and build
+
+    # PR 검증은 배포 서버를 건드리지 않도록 GitHub-hosted runner에서 실행한다.
+    # self-hosted runner로 실행하고 싶다면 ubuntu-latest 대신 runner label을 지정하면 된다.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Check build environment
+        run: |
+          java -version
+          mvn -version
+
+      - name: Run tests
+        run: |
+          mvn -B clean test
+
+      - name: Build WAR
+        run: |
+          mvn -B package -DskipTests
+          ls -al target
+
+      - name: Upload WAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nice-poc-war
+          path: target/nice-poc.war
+          if-no-files-found: error
