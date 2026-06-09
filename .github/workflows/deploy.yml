@@ -73,14 +73,14 @@ jobs:
           sudo -n -l
           sudo -k
           sudo -n whoami
-          sudo -n /usr/bin/systemctl status tomcat10 --no-pager
+          sudo -n /bin/systemctl status tomcat10 --no-pager
 
       - name: Start Tomcat
         run: |
           # 새로 배포한 ROOT.war를 읽도록 Tomcat 서비스를 시작한다.
-          sudo -n /usr/bin/systemctl start tomcat10
+          sudo -n /bin/systemctl start tomcat10
           # Tomcat 서비스가 정상 실행 중인지 Actions 로그에 출력한다.
-          sudo -n /usr/bin/systemctl status "$TOMCAT_SERVICE" --no-pager
+          sudo -n /bin/systemctl status "$TOMCAT_SERVICE" --no-pager
 
       - name: Show deployed files
         run: |
