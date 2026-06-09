@@ -65,16 +65,6 @@ jobs:
           # Tomcat 프로세스가 WAR 파일을 읽을 수 있도록 소유자를 tomcat 사용자로 맞춘다.
           sudo -n /usr/bin/chown tomcat:tomcat "$TOMCAT_WEBAPPS/$DEPLOY_WAR" || true
 
-      - name: Debug sudo in runner
-        run: |
-          whoami
-          id
-          groups
-          sudo -n -l
-          sudo -k
-          sudo -n whoami
-          sudo -n /bin/systemctl status tomcat10 --no-pager
-
       - name: Start Tomcat
         run: |
           # 새로 배포한 ROOT.war를 읽도록 Tomcat 서비스를 시작한다.
