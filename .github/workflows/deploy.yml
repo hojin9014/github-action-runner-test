@@ -37,7 +37,7 @@ jobs:
     steps:
       - name: Checkout
         # GitHub repository의 현재 소스코드를 Deploy Runner VM 작업 폴더로 내려받는다.
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Check runner environment
         run: |
