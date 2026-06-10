@@ -1,71 +1,95 @@
 name: Deploy to GCP Tomcat
 
+# main 브랜치에 push되거나 GitHub Actions 화면에서 수동 실행하면 배포한다.
 on:
   push:
     branches:
       - main
   workflow_dispatch:
 
+# checkout에 필요한 최소 권한만 허용한다.
 permissions:
   contents: read
 
 jobs:
   deploy:
+    # Deploy Runner VM에 등록한 self-hosted runner label과 일치해야 한다.
+    # Tomcat은 WAS VM에 있으므로 runner label에는 tomcat을 넣지 않는다.
     runs-on:
       - self-hosted
       - Linux
       - x64
       - deploy
 
+    # 배포 과정에서 반복해서 사용하는 파일명과 WAS 경로를 한 곳에 모아둔다.
     env:
+      # Maven 빌드 결과물이다. pom.xml의 finalName 값과 맞아야 한다.
       APP_WAR: nice-poc.war
+      # Tomcat 루트 컨텍스트(/)로 배포하기 위해 ROOT.war로 배치한다.
       DEPLOY_WAR: ROOT.war
+      # WAS VM에 설치된 Tomcat systemd 서비스명이다.
       TOMCAT_SERVICE: tomcat10
+      # Ubuntu tomcat10 패키지 기준 webapps 배포 경로다.
       TOMCAT_WEBAPPS: /var/lib/tomcat10/webapps
+      # Runner VM에서 WAS VM으로 WAR 파일을 먼저 업로드할 임시 위치다.
       REMOTE_WAR: /tmp/nice-poc.war
 
     steps:
       - name: Checkout
+        # GitHub repository의 현재 소스코드를 Deploy Runner VM 작업 폴더로 내려받는다.
         uses: actions/checkout@v4
 
       - name: Check runner environment
         run: |
+          # 이 job이 실제 Deploy Runner VM에서 실행 중인지 확인하기 위한 진단 출력이다.
           hostname
           whoami
           pwd
+          # Runner VM에서 Maven 빌드가 가능해야 하므로 Java/Maven/SSH client를 확인한다.
           java -version
           mvn -version
           ssh -V
 
       - name: Run tests
         run: |
+          # 배포 전에 테스트를 먼저 실행한다. 실패하면 이후 배포 단계는 실행되지 않는다.
           mvn -B clean test
 
       - name: Build WAR
         run: |
+          # 테스트는 앞 단계에서 통과했으므로 여기서는 WAR 패키징만 수행한다.
           mvn -B package -DskipTests
+          # 기대한 WAR 파일이 없으면 즉시 실패시켜 잘못된 파일을 배포하지 않게 한다.
           test -f "target/$APP_WAR"
           ls -al target
 
       - name: Configure SSH
+        # GitHub repository secrets에서 WAS 접속 정보를 가져온다.
+        # WAS_SSH_KEY에는 public key가 아니라 private key 전체가 들어가야 한다.
         env:
           WAS_HOST: ${{ secrets.WAS_HOST }}
           WAS_PORT: ${{ secrets.WAS_PORT }}
           WAS_SSH_KEY: ${{ secrets.WAS_SSH_KEY }}
         run: |
+          # -e: 실패한 명령이 있으면 즉시 중단, -u: 정의되지 않은 변수를 쓰면 중단한다.
           set -eu
+          # WAS_PORT secret이 비어 있으면 기본 SSH 포트인 22를 사용한다.
           WAS_PORT="${WAS_PORT:-22}"
 
+          # 필수 secret이 비어 있으면 여기서 실패한다.
           test -n "$WAS_HOST"
           test -n "$WAS_SSH_KEY"
 
+          # Actions 실행 중에만 사용할 SSH key 파일을 runner 홈 디렉터리에 만든다.
           install -m 700 -d ~/.ssh
           printf '%s\n' "$WAS_SSH_KEY" > ~/.ssh/was_deploy_key
           chmod 600 ~/.ssh/was_deploy_key
+          # 비대화형 배포 중 host authenticity 프롬프트가 뜨지 않도록 known_hosts에 등록한다.
           ssh-keyscan -p "$WAS_PORT" -H "$WAS_HOST" >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
       - name: Verify WAS connection
+        # 실제 배포 전에 WAS VM에 SSH 접속이 되는지 먼저 확인한다.
         env:
           WAS_HOST: ${{ secrets.WAS_HOST }}
           WAS_PORT: ${{ secrets.WAS_PORT }}
@@ -76,6 +100,7 @@ jobs:
           test -n "$WAS_HOST"
           test -n "$WAS_USER"
 
+          # 성공하면 WAS VM의 hostname과 접속 사용자(deploy)가 출력된다.
           ssh -i ~/.ssh/was_deploy_key \
             -p "$WAS_PORT" \
             -o IdentitiesOnly=yes \
@@ -83,6 +108,7 @@ jobs:
             'hostname && whoami'
 
       - name: Upload WAR to WAS
+        # 빌드된 WAR 파일을 WAS VM의 임시 경로로 전송한다.
         env:
           WAS_HOST: ${{ secrets.WAS_HOST }}
           WAS_PORT: ${{ secrets.WAS_PORT }}
@@ -91,6 +117,7 @@ jobs:
           set -eu
           WAS_PORT="${WAS_PORT:-22}"
 
+          # 같은 VPC 내부 private IP를 WAS_HOST로 쓰면 외부망을 거치지 않고 전송된다.
           scp -i ~/.ssh/was_deploy_key \
             -P "$WAS_PORT" \
             -o IdentitiesOnly=yes \
@@ -98,6 +125,7 @@ jobs:
             "$WAS_USER@$WAS_HOST:$REMOTE_WAR"
 
       - name: Deploy WAR on WAS
+        # WAS VM에 SSH로 접속해서 Tomcat 배포 명령을 원격 실행한다.
         env:
           WAS_HOST: ${{ secrets.WAS_HOST }}
           WAS_PORT: ${{ secrets.WAS_PORT }}
@@ -111,11 +139,16 @@ jobs:
             -o IdentitiesOnly=yes \
             "$WAS_USER@$WAS_HOST" \
             "set -e
+             # 새 WAR로 교체하기 전에 Tomcat을 중지한다.
              sudo -n /usr/bin/systemctl stop '$TOMCAT_SERVICE'
+             # 기존 ROOT.war와 압축 해제된 ROOT 디렉터리를 제거한다.
              sudo -n /usr/bin/rm -f '$TOMCAT_WEBAPPS/$DEPLOY_WAR'
              sudo -n /usr/bin/rm -rf '$TOMCAT_WEBAPPS/ROOT'
+             # 업로드한 WAR를 Tomcat 루트 애플리케이션으로 배치한다.
              sudo -n /usr/bin/cp '$REMOTE_WAR' '$TOMCAT_WEBAPPS/$DEPLOY_WAR'
+             # Tomcat 프로세스가 WAR 파일을 읽을 수 있도록 소유권을 맞춘다.
              sudo -n /usr/bin/chown tomcat:tomcat '$TOMCAT_WEBAPPS/$DEPLOY_WAR' || true
+             # Tomcat을 다시 시작하고 서비스 활성 상태와 배포 파일 목록을 출력한다.
              sudo -n /usr/bin/systemctl start '$TOMCAT_SERVICE'
              systemctl is-active '$TOMCAT_SERVICE'
              ls -al '$TOMCAT_WEBAPPS'"
