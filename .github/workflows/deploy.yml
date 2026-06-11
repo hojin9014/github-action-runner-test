@@ -65,7 +65,6 @@ jobs:
 
       - name: Configure SSH
         # GitHub repository secrets에서 WAS 접속 정보를 가져온다.
-        # WAS_SSH_KEY에는 public key가 아니라 private key 전체가 들어가야 한다.
         env:
           WAS_HOST: ${{ secrets.WAS_HOST }}
           WAS_PORT: ${{ secrets.WAS_PORT }}
